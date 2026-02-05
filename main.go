@@ -33,6 +33,7 @@ type APIResponse struct {
 }
 
 func calculateHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: create a helper function for CORS setup
 	// --- CORS setup ---
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
@@ -55,6 +56,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: create a separate validation function
 	// --- Validation ---
 	req.State = strings.TrimSpace(strings.ToUpper(req.State)) // Normalize state
 
@@ -86,6 +88,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	// --- Calculation ---
 	result := calculator.Calculate(req.Amount, rate)
 
+	// TODO: create a mapper function build TaxResponse with `req` and `result` values
 	finalData := &TaxResponse{
 		BaseAmount: req.Amount,
 		TaxAmount:  result.TaxAmount,
@@ -95,6 +98,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		Year:       req.Year,
 	}
 
+	// TODO: the sendError function also sends a JSON response, so create a helper function and re-use it in both places
 	json.NewEncoder(w).Encode(APIResponse{
 		Success: true,
 		Data:    finalData,
