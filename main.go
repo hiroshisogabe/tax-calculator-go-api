@@ -114,6 +114,12 @@ func mapToResponse(req TaxRequest, res calculator.Result) *TaxResponse {
 	}
 }
 
+func sendJSON(w http.ResponseWriter, httpStatusCode int, payload APIResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatusCode)
+	json.NewEncoder(w).Encode(payload)
+}
+
 // Helper to send JSON errors easily
 func sendError(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "application/json")
