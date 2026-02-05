@@ -87,15 +87,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	// --- Calculation ---
 	result := calculator.Calculate(req.Amount, rate)
 
-	// TODO: create a mapper function build TaxResponse with `req` and `result` values
-	finalData := &TaxResponse{
-		BaseAmount: req.Amount,
-		TaxAmount:  result.TaxAmount,
-		Total:      result.Total,
-		Rate:       result.Rate,
-		State:      req.State,
-		Year:       req.Year,
-	}
+	finalData := mapToResponse(req, result)
 
 	// TODO: the sendError function also sends a JSON response, so create a helper function and re-use it in both places
 	json.NewEncoder(w).Encode(APIResponse{
@@ -109,6 +101,17 @@ func setupCORS(w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
+}
+
+func mapToResponse(req TaxRequest, res calculator.Result) *TaxResponse {
+	return &TaxResponse{
+		BaseAmount: req.Amount,
+		TaxAmount:  res.TaxAmount,
+		Total:      res.Total,
+		Rate:       res.Rate,
+		State:      req.State,
+		Year:       req.Year,
+	}
 }
 
 // Helper to send JSON errors easily
