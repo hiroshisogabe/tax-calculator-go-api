@@ -67,12 +67,12 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	// --- Decode JSON ---
 	var req TaxRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendError(w, "Invalid JSON format")
+		sendError(w, "Invalid JSON format", http.StatusBadRequest)
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		sendError(w, err.Error())
+		sendError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -80,7 +80,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	rate, found := calculator.FindRate(req.State, req.Year, req.ProductCategory)
 	if !found {
 		msg := fmt.Sprintf("Tax rules for %s in %d are not available for the %s category.", req.State, req.Year, req.ProductCategory)
-		sendError(w, msg)
+		sendError(w, msg, http.StatusNotFound)
 		return
 	}
 
@@ -89,8 +89,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 
 	finalData := mapToResponse(req, result)
 
-	// TODO: the sendError function also sends a JSON response, so create a helper function and re-use it in both places
-	json.NewEncoder(w).Encode(APIResponse{
+	sendJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Data:    finalData,
 	})
@@ -120,13 +119,8 @@ func sendJSON(w http.ResponseWriter, httpStatusCode int, payload APIResponse) {
 	json.NewEncoder(w).Encode(payload)
 }
 
-// Helper to send JSON errors easily
-func sendError(w http.ResponseWriter, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	// You might want to use 400 Bad Request, but to match your ActionResponse structure (success: false), we can keep 200 or use 400.
-	// Standard REST APIs usually return 400 for validation errors.
-	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(APIResponse{
+func sendError(w http.ResponseWriter, message string, httpStatusCode int) {
+	sendJSON(w, httpStatusCode, APIResponse{
 		Success: false,
 		Error:   message,
 	})
