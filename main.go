@@ -17,6 +17,25 @@ type TaxRequest struct {
 	ProductCategory string  `json:"productCategory"`
 }
 
+func (req *TaxRequest) Validate() error {
+	req.State = strings.TrimSpace(strings.ToUpper(req.State))
+
+	if req.Amount <= 0 {
+		return fmt.Errorf("Amount must be greater than zero")
+	}
+	if len(req.State) < 2 {
+		return fmt.Errorf("State code is required (e.g., NY)")
+	}
+	if req.Year < 1000 || req.Year > 9999 {
+		return fmt.Errorf("Year must be a 4-digit number")
+	}
+	if req.ProductCategory == "" {
+		return fmt.Errorf("Category is required")
+	}
+
+	return nil
+}
+
 type TaxResponse struct {
 	BaseAmount float64 `json:"baseAmount"`
 	TaxAmount  float64 `json:"taxAmount"`
@@ -52,24 +71,8 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: create a separate validation function
-	// --- Validation ---
-	req.State = strings.TrimSpace(strings.ToUpper(req.State)) // Normalize state
-
-	if req.Amount <= 0 {
-		sendError(w, "Amount must be greater than zero")
-		return
-	}
-	if len(req.State) < 2 {
-		sendError(w, "State code is required (e.g., NY)")
-		return
-	}
-	if req.Year < 1000 || req.Year > 9999 {
-		sendError(w, "Year must be a 4-digit number")
-		return
-	}
-	if req.ProductCategory == "" {
-		sendError(w, "Category is required")
+	if err := req.Validate(); err != nil {
+		sendError(w, err.Error())
 		return
 	}
 
