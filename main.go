@@ -33,11 +33,7 @@ type APIResponse struct {
 }
 
 func calculateHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: create a helper function for CORS setup
-	// --- CORS setup ---
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	setupCORS(&w)
 
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
@@ -103,6 +99,13 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data:    finalData,
 	})
+}
+
+// --- Helpers and utilities ---
+func setupCORS(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
 // Helper to send JSON errors easily
