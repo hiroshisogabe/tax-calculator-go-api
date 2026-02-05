@@ -6,11 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/hiroshisogabe/tax-calculator-go-api/pkg/calculator"
 )
 
-// --- 1. Data Structures ---
-
-// TaxRequest matches your Zod schema inputs
 type TaxRequest struct {
 	Amount          float64 `json:"amount"`
 	State           string  `json:"state"`
@@ -18,8 +17,7 @@ type TaxRequest struct {
 	ProductCategory string  `json:"productCategory"`
 }
 
-// TaxResult matches the successful calculation data
-type TaxResult struct {
+type TaxResponse struct {
 	BaseAmount float64 `json:"baseAmount"`
 	TaxAmount  float64 `json:"taxAmount"`
 	Total      float64 `json:"total"`
@@ -28,44 +26,14 @@ type TaxResult struct {
 	Year       int     `json:"year"`
 }
 
-// APIResponse matches your ActionResponse structure partially
 type APIResponse struct {
-	Success bool       `json:"success"`
-	Data    *TaxResult `json:"data,omitempty"` // pointer so it can be null
-	Error   string     `json:"error,omitempty"`
+	Success bool         `json:"success"`
+	Data    *TaxResponse `json:"data,omitempty"`  // pointer to explicitly represent null when no result handled by omitempty
+	Error   string       `json:"error,omitempty"` // omitempty handles empty string (no error case)
 }
-
-// --- 2. Mock Database & Logic ---
-
-// TaxRule represents a row in your rules database
-type TaxRule struct {
-	State    string
-	Year     int
-	Category string
-	Rate     float64
-}
-
-// mockRules simulates your database/service lookup
-var mockRules = []TaxRule{
-	{State: "NY", Year: 2024, Category: "electronics", Rate: 0.088},
-	{State: "CA", Year: 2024, Category: "clothing", Rate: 0.075},
-	{State: "TX", Year: 2024, Category: "services", Rate: 0.0},
-}
-
-// findRate simulates your findTax service
-func findRate(state string, year int, category string) (float64, bool) {
-	for _, rule := range mockRules {
-		if rule.State == state && rule.Year == year && rule.Category == category {
-			return rule.Rate, true
-		}
-	}
-	return 0, false
-}
-
-// --- 3. HTTP Handler ---
 
 func calculateHandler(w http.ResponseWriter, r *http.Request) {
-	// CORS setup
+	// --- CORS setup ---
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -80,7 +48,7 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decode JSON
+	// --- Decode JSON ---
 	var req TaxRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		sendError(w, "Invalid JSON format")
@@ -108,34 +76,29 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- Business Logic ---
-	rate, found := findRate(req.State, req.Year, req.ProductCategory)
-
+	rate, found := calculator.FindRate(req.State, req.Year, req.ProductCategory)
 	if !found {
-		// Mimicking your "Tax rules not available" error
 		msg := fmt.Sprintf("Tax rules for %s in %d are not available for the %s category.", req.State, req.Year, req.ProductCategory)
 		sendError(w, msg)
 		return
 	}
 
-	// Calculation
-	taxAmount := req.Amount * rate
-	total := req.Amount + taxAmount
+	// --- Calculation ---
+	result := calculator.Calculate(req.Amount, rate)
 
-	// Success Response
-	resp := APIResponse{
-		Success: true,
-		Data: &TaxResult{
-			BaseAmount: req.Amount,
-			TaxAmount:  taxAmount,
-			Total:      total,
-			Rate:       rate,
-			State:      req.State,
-			Year:       req.Year,
-		},
+	finalData := &TaxResponse{
+		BaseAmount: req.Amount,
+		TaxAmount:  result.TaxAmount,
+		Total:      result.Total,
+		Rate:       result.Rate,
+		State:      req.State,
+		Year:       req.Year,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(APIResponse{
+		Success: true,
+		Data:    finalData,
+	})
 }
 
 // Helper to send JSON errors easily
