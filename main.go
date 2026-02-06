@@ -17,6 +17,25 @@ type TaxRequest struct {
 	ProductCategory string  `json:"productCategory"`
 }
 
+func (req *TaxRequest) Validate() error {
+	req.State = strings.TrimSpace(strings.ToUpper(req.State))
+
+	if req.Amount <= 0 {
+		return fmt.Errorf("Amount must be greater than zero")
+	}
+	if len(req.State) < 2 {
+		return fmt.Errorf("State code is required (e.g., NY)")
+	}
+	if req.Year < 1000 || req.Year > 9999 {
+		return fmt.Errorf("Year must be a 4-digit number")
+	}
+	if req.ProductCategory == "" {
+		return fmt.Errorf("Category is required")
+	}
+
+	return nil
+}
+
 type TaxResponse struct {
 	BaseAmount float64 `json:"baseAmount"`
 	TaxAmount  float64 `json:"taxAmount"`
@@ -33,11 +52,7 @@ type APIResponse struct {
 }
 
 func calculateHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: create a helper function for CORS setup
-	// --- CORS setup ---
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	setupCORS(&w)
 
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
@@ -52,28 +67,12 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	// --- Decode JSON ---
 	var req TaxRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendError(w, "Invalid JSON format")
+		sendError(w, "Invalid JSON format", http.StatusBadRequest)
 		return
 	}
 
-	// TODO: create a separate validation function
-	// --- Validation ---
-	req.State = strings.TrimSpace(strings.ToUpper(req.State)) // Normalize state
-
-	if req.Amount <= 0 {
-		sendError(w, "Amount must be greater than zero")
-		return
-	}
-	if len(req.State) < 2 {
-		sendError(w, "State code is required (e.g., NY)")
-		return
-	}
-	if req.Year < 1000 || req.Year > 9999 {
-		sendError(w, "Year must be a 4-digit number")
-		return
-	}
-	if req.ProductCategory == "" {
-		sendError(w, "Category is required")
+	if err := req.Validate(); err != nil {
+		sendError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -81,37 +80,47 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 	rate, found := calculator.FindRate(req.State, req.Year, req.ProductCategory)
 	if !found {
 		msg := fmt.Sprintf("Tax rules for %s in %d are not available for the %s category.", req.State, req.Year, req.ProductCategory)
-		sendError(w, msg)
+		sendError(w, msg, http.StatusNotFound)
 		return
 	}
 
 	// --- Calculation ---
 	result := calculator.Calculate(req.Amount, rate)
 
-	// TODO: create a mapper function build TaxResponse with `req` and `result` values
-	finalData := &TaxResponse{
-		BaseAmount: req.Amount,
-		TaxAmount:  result.TaxAmount,
-		Total:      result.Total,
-		Rate:       result.Rate,
-		State:      req.State,
-		Year:       req.Year,
-	}
+	finalData := mapToResponse(req, result)
 
-	// TODO: the sendError function also sends a JSON response, so create a helper function and re-use it in both places
-	json.NewEncoder(w).Encode(APIResponse{
+	sendJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Data:    finalData,
 	})
 }
 
-// Helper to send JSON errors easily
-func sendError(w http.ResponseWriter, message string) {
+// --- Helpers and utilities ---
+func setupCORS(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
+}
+
+func mapToResponse(req TaxRequest, res calculator.Result) *TaxResponse {
+	return &TaxResponse{
+		BaseAmount: req.Amount,
+		TaxAmount:  res.TaxAmount,
+		Total:      res.Total,
+		Rate:       res.Rate,
+		State:      req.State,
+		Year:       req.Year,
+	}
+}
+
+func sendJSON(w http.ResponseWriter, httpStatusCode int, payload APIResponse) {
 	w.Header().Set("Content-Type", "application/json")
-	// You might want to use 400 Bad Request, but to match your ActionResponse structure (success: false), we can keep 200 or use 400.
-	// Standard REST APIs usually return 400 for validation errors.
-	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(APIResponse{
+	w.WriteHeader(httpStatusCode)
+	json.NewEncoder(w).Encode(payload)
+}
+
+func sendError(w http.ResponseWriter, message string, httpStatusCode int) {
+	sendJSON(w, httpStatusCode, APIResponse{
 		Success: false,
 		Error:   message,
 	})
